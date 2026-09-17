@@ -1,0 +1,437 @@
+<script>
+(function () {
+  'use strict';
+
+  var estado = {
+    categorias: [],
+    subcategorias: [],
+    insumos: [],
+    produtosFinais: [],
+    estabelecimentos: []
+  };
+
+  // ---------- utilidades ----------
+  function fmtMoeda(v) {
+    v = Number(v) || 0;
+    return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  }
+
+  function mostrarMensagem(texto, tipo) {
+    var div = document.createElement('div');
+    div.className = 'aviso ' + (tipo || 'erro');
+    div.textContent = texto;
+    var container = document.getElementById('mensagens');
+    container.innerHTML = '';
+    container.appendChild(div);
+    setTimeout(function () { div.remove(); }, 6000);
+  }
+
+  function preencherSelect(select, itens, valorCampo, textoCampo, comPlaceholder) {
+    select.innerHTML = '';
+    if (comPlaceholder) {
+      var opt0 = document.createElement('option');
+      opt0.value = '';
+      opt0.textContent = '-- selecione --';
+      select.appendChild(opt0);
+    }
+    itens.forEach(function (item) {
+      var opt = document.createElement('option');
+      opt.value = item[valorCampo];
+      opt.textContent = item[textoCampo];
+      select.appendChild(opt);
+    });
+  }
+
+  function chamar(nomeFuncao) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(resolve)
+        .withFailureHandler(function (err) { reject(err); })[nomeFuncao].apply(null, args);
+    });
+  }
+
+  // ---------- navegação por abas ----------
+  document.getElementById('abas').addEventListener('click', function (e) {
+    if (e.target.tagName !== 'BUTTON') return;
+    var secao = e.target.getAttribute('data-secao');
+    document.querySelectorAll('nav.abas button').forEach(function (b) { b.classList.remove('ativa'); });
+    e.target.classList.add('ativa');
+    document.querySelectorAll('main .secao').forEach(function (s) { s.classList.remove('ativa'); });
+    document.getElementById('secao-' + secao).classList.add('ativa');
+  });
+
+  // ---------- carregamento inicial ----------
+  function carregarTudo() {
+    chamar('carregarDadosIniciais').then(function (dados) {
+      estado.categorias = dados.categorias;
+      estado.subcategorias = dados.subcategorias;
+      estado.insumos = dados.insumos;
+      estado.produtosFinais = dados.produtosFinais;
+      estado.estabelecimentos = dados.estabelecimentos;
+
+      renderDashboard(dados);
+      renderSelects();
+      renderTabelaInsumos();
+      renderTabelaCompras(dados.compras);
+      renderTabelaVendas(dados.vendas);
+      renderTabelaFinanceiro(dados.lancamentos);
+
+      if (!document.getElementById('linhas-simulacao').children.length) adicionarLinhaSimulacao();
+      if (!document.getElementById('linhas-receita').children.length) adicionarLinhaReceita();
+    }).catch(function (err) { mostrarMensagem(err.message || String(err)); });
+  }
+
+  function renderDashboard(dados) {
+    var r = dados.resumoFinanceiro;
+    var cards = [
+      { rotulo: 'Saldo bancário atual', valor: r.saldoBancarioAtual },
+      { rotulo: 'Receita de vendas', valor: r.receitaVendas, classe: 'positivo' },
+      { rotulo: 'Custo de produção', valor: r.custoProducao, classe: 'negativo' },
+      { rotulo: 'Despesas gerais', valor: r.despesasGerais, classe: 'negativo' },
+      { rotulo: 'Margem bruta', valor: r.margemBruta },
+      { rotulo: 'Lucro líquido', valor: r.lucroLiquido }
+    ];
+    var container = document.getElementById('cards-resumo');
+    container.innerHTML = '';
+    cards.forEach(function (c) {
+      container.appendChild(criarCard(c.rotulo, c.valor, c.classe));
+    });
+    renderTabelaLancamentos(document.getElementById('tabela-lancamentos-dashboard').querySelector('tbody'), dados.lancamentos);
+  }
+
+  function criarCard(rotulo, valor, classeExtra) {
+    var card = document.createElement('div');
+    card.className = 'card';
+    var classe = classeExtra || (valor < 0 ? 'negativo' : '');
+    card.innerHTML = '<div class="rotulo">' + rotulo + '</div><div class="valor ' + classe + '">' + fmtMoeda(valor) + '</div>';
+    return card;
+  }
+
+  function renderSelects() {
+    preencherSelect(document.getElementById('select-categoria-sub'), estado.categorias, 'id', 'nome');
+    preencherSelect(document.getElementById('select-categoria-insumo'), estado.categorias, 'id', 'nome', true);
+    atualizarSubcategoriasInsumo();
+    preencherSelect(document.getElementById('select-estabelecimento-compra'), estado.estabelecimentos, 'id', 'nome', true);
+    preencherSelect(document.getElementById('select-insumo-compra'), estado.insumos, 'id', 'nome', true);
+    preencherSelect(document.getElementById('select-produto-receita'), estado.produtosFinais, 'id', 'nome', true);
+    preencherSelect(document.getElementById('select-produto-producao'), estado.produtosFinais, 'id', 'nome', true);
+    preencherSelect(document.getElementById('select-produto-venda'), estado.produtosFinais, 'id', 'nome', true);
+  }
+
+  function atualizarSubcategoriasInsumo() {
+    var categoriaId = document.getElementById('select-categoria-insumo').value;
+    var subs = estado.subcategorias.filter(function (s) { return String(s.categoriaId) === String(categoriaId); });
+    preencherSelect(document.getElementById('select-subcategoria-insumo'), subs, 'id', 'nome', true);
+  }
+  document.getElementById('select-categoria-insumo').addEventListener('change', atualizarSubcategoriasInsumo);
+
+  function nomeInsumo(id) {
+    var i = estado.insumos.filter(function (x) { return String(x.id) === String(id); })[0];
+    return i ? i.nome + ' (' + i.unidade + ')' : id;
+  }
+  function nomeProduto(id) {
+    var p = estado.produtosFinais.filter(function (x) { return String(x.id) === String(id); })[0];
+    return p ? p.nome : id;
+  }
+
+  // ---------- tabelas ----------
+  function renderTabelaInsumos() {
+    var tbody = document.getElementById('tabela-insumos').querySelector('tbody');
+    tbody.innerHTML = '';
+    estado.insumos.forEach(function (i) {
+      var categoria = estado.categorias.filter(function (c) { return String(c.id) === String(i.categoriaId); })[0];
+      var linha = document.createElement('tr');
+      var baixo = Number(i.estoqueAtual) <= Number(i.estoqueMinimo || 0);
+      linha.innerHTML = '<td>' + i.nome + '</td><td>' + (categoria ? categoria.nome : '-') + '</td>' +
+        '<td>' + Number(i.estoqueAtual).toFixed(2) + ' ' + i.unidade + (baixo ? ' <span class="selo faltou">baixo</span>' : '') + '</td>' +
+        '<td>' + Number(i.estoqueMinimo || 0).toFixed(2) + '</td><td>' + fmtMoeda(i.custoUnitarioMedio) + '</td>';
+      tbody.appendChild(linha);
+    });
+  }
+
+  function renderTabelaCompras(compras) {
+    var tbody = document.getElementById('tabela-compras').querySelector('tbody');
+    tbody.innerHTML = '';
+    compras.forEach(function (c) {
+      var linha = document.createElement('tr');
+      linha.innerHTML = '<td>' + c.data + '</td><td>' + nomeInsumo(c.insumoId) + '</td><td>' + c.quantidade + '</td>' +
+        '<td>' + fmtMoeda(c.valorUnitario) + '</td><td>' + fmtMoeda(c.valorTotal) + '</td>';
+      tbody.appendChild(linha);
+    });
+  }
+
+  function renderTabelaVendas(vendas) {
+    var tbody = document.getElementById('tabela-vendas').querySelector('tbody');
+    tbody.innerHTML = '';
+    vendas.forEach(function (v) {
+      var linha = document.createElement('tr');
+      linha.innerHTML = '<td>' + v.data + '</td><td>' + nomeProduto(v.produtoFinalId) + '</td><td>' + v.quantidade + '</td>' +
+        '<td>' + fmtMoeda(v.valorUnitario) + '</td><td>' + fmtMoeda(v.valorTotal) + '</td><td>' + v.canal + '</td>';
+      tbody.appendChild(linha);
+    });
+  }
+
+  function renderTabelaLancamentos(tbody, lancamentos) {
+    tbody.innerHTML = '';
+    lancamentos.forEach(function (l) {
+      var linha = document.createElement('tr');
+      linha.innerHTML = '<td>' + l.data + '</td><td>' + l.tipo + '</td><td>' + l.categoria + '</td>' +
+        '<td>' + l.descricao + '</td><td>' + fmtMoeda(l.valor) + '</td><td>' + fmtMoeda(l.saldoResultante) + '</td>';
+      tbody.appendChild(linha);
+    });
+  }
+
+  function renderTabelaFinanceiro(lancamentos) {
+    renderTabelaLancamentos(document.getElementById('tabela-financeiro').querySelector('tbody'), lancamentos);
+  }
+
+  // ---------- formulários: cadastros ----------
+  function tratarFormulario(idForm, aoEnviar) {
+    document.getElementById(idForm).addEventListener('submit', function (e) {
+      e.preventDefault();
+      var dados = Object.fromEntries(new FormData(e.target).entries());
+      aoEnviar(dados, e.target);
+    });
+  }
+
+  tratarFormulario('form-categoria', function (dados, form) {
+    chamar('salvarCategoria', dados.nome).then(function () {
+      mostrarMensagem('Categoria adicionada.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-subcategoria', function (dados, form) {
+    chamar('salvarSubcategoria', dados.categoriaId, dados.nome).then(function () {
+      mostrarMensagem('Subcategoria adicionada.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-estabelecimento', function (dados, form) {
+    chamar('salvarEstabelecimento', dados.nome, dados.observacao).then(function () {
+      mostrarMensagem('Estabelecimento adicionado.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-insumo', function (dados, form) {
+    chamar('salvarInsumo', dados).then(function () {
+      mostrarMensagem('Insumo adicionado.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-produto-final', function (dados, form) {
+    chamar('salvarProdutoFinal', dados).then(function () {
+      mostrarMensagem('Produto adicionado.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-compra', function (dados, form) {
+    chamar('registrarCompra', dados).then(function () {
+      mostrarMensagem('Compra registrada.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-venda', function (dados, form) {
+    chamar('registrarVenda', dados).then(function () {
+      mostrarMensagem('Venda registrada.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-producao', function (dados, form) {
+    chamar('registrarProducao', dados.produtoFinalId, dados.quantidade).then(function () {
+      mostrarMensagem('Produção registrada e estoque atualizado.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-saldo-inicial', function (dados, form) {
+    chamar('definirSaldoInicial', dados.valor).then(function () {
+      mostrarMensagem('Saldo inicial salvo.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-lancamento', function (dados, form) {
+    chamar('registrarLancamentoManual', dados).then(function () {
+      mostrarMensagem('Lançamento registrado.', 'sucesso');
+      form.reset();
+      carregarTudo();
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  tratarFormulario('form-periodo', function (dados) {
+    chamar('resumoFinanceiro', dados.inicio || null, dados.fim || null).then(function (r) {
+      var container = document.getElementById('cards-resumo-financeiro');
+      container.innerHTML = '';
+      [
+        { rotulo: 'Receita de vendas', valor: r.receitaVendas },
+        { rotulo: 'Custo de produção', valor: r.custoProducao },
+        { rotulo: 'Despesas gerais', valor: r.despesasGerais },
+        { rotulo: 'Margem bruta', valor: r.margemBruta },
+        { rotulo: 'Lucro líquido', valor: r.lucroLiquido },
+        { rotulo: 'Saldo bancário atual', valor: r.saldoBancarioAtual }
+      ].forEach(function (c) { container.appendChild(criarCard(c.rotulo, c.valor)); });
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  // ---------- ficha técnica (receita) ----------
+  document.getElementById('btn-add-linha-receita').addEventListener('click', adicionarLinhaReceita);
+  function adicionarLinhaReceita() {
+    var div = document.createElement('div');
+    div.className = 'linha-receita';
+    var selectInsumo = document.createElement('select');
+    preencherSelect(selectInsumo, estado.insumos, 'id', 'nome', true);
+    var inputQtd = document.createElement('input');
+    inputQtd.type = 'number';
+    inputQtd.step = '0.001';
+    inputQtd.placeholder = 'Qtd por unidade';
+    var btnRemover = document.createElement('button');
+    btnRemover.type = 'button';
+    btnRemover.className = 'botao secundario pequeno';
+    btnRemover.textContent = 'remover';
+    btnRemover.addEventListener('click', function () { div.remove(); });
+    div.appendChild(selectInsumo);
+    div.appendChild(inputQtd);
+    div.appendChild(btnRemover);
+    document.getElementById('linhas-receita').appendChild(div);
+  }
+
+  document.getElementById('select-produto-receita').addEventListener('change', function () {
+    var produtoFinalId = this.value;
+    document.getElementById('linhas-receita').innerHTML = '';
+    if (!produtoFinalId) { adicionarLinhaReceita(); return; }
+    chamar('listarReceita', produtoFinalId).then(function (itens) {
+      if (!itens.length) { adicionarLinhaReceita(); return; }
+      itens.forEach(function (item) {
+        adicionarLinhaReceita();
+        var ultima = document.getElementById('linhas-receita').lastChild;
+        ultima.querySelector('select').value = item.insumoId;
+        ultima.querySelector('input').value = item.quantidadePorUnidade;
+      });
+    });
+  });
+
+  document.getElementById('btn-salvar-receita').addEventListener('click', function () {
+    var produtoFinalId = document.getElementById('select-produto-receita').value;
+    if (!produtoFinalId) { mostrarMensagem('Selecione o produto final.'); return; }
+    var itens = [];
+    document.getElementById('linhas-receita').querySelectorAll('.linha-receita').forEach(function (linha) {
+      var insumoId = linha.querySelector('select').value;
+      var qtd = linha.querySelector('input').value;
+      if (insumoId && qtd) itens.push({ insumoId: insumoId, quantidadePorUnidade: qtd });
+    });
+    chamar('salvarReceita', produtoFinalId, itens).then(function () {
+      mostrarMensagem('Ficha técnica salva.', 'sucesso');
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  // ---------- simulação de produção ----------
+  document.getElementById('btn-add-linha-simulacao').addEventListener('click', adicionarLinhaSimulacao);
+  function adicionarLinhaSimulacao() {
+    var div = document.createElement('div');
+    div.className = 'linha-receita';
+    var selectProduto = document.createElement('select');
+    preencherSelect(selectProduto, estado.produtosFinais, 'id', 'nome', true);
+    var inputQtd = document.createElement('input');
+    inputQtd.type = 'number';
+    inputQtd.step = '1';
+    inputQtd.placeholder = 'Quantidade desejada';
+    var btnRemover = document.createElement('button');
+    btnRemover.type = 'button';
+    btnRemover.className = 'botao secundario pequeno';
+    btnRemover.textContent = 'remover';
+    btnRemover.addEventListener('click', function () { div.remove(); });
+    div.appendChild(selectProduto);
+    div.appendChild(inputQtd);
+    div.appendChild(btnRemover);
+    document.getElementById('linhas-simulacao').appendChild(div);
+  }
+
+  document.getElementById('btn-simular').addEventListener('click', function () {
+    var pedidos = [];
+    document.getElementById('linhas-simulacao').querySelectorAll('.linha-receita').forEach(function (linha) {
+      var produtoFinalId = linha.querySelector('select').value;
+      var quantidade = linha.querySelector('input').value;
+      if (produtoFinalId && quantidade) pedidos.push({ produtoFinalId: produtoFinalId, quantidade: quantidade });
+    });
+    if (!pedidos.length) { mostrarMensagem('Adicione ao menos um produto para simular.'); return; }
+
+    chamar('simularProducao', pedidos).then(function (resultado) {
+      renderResultadoSimulacao(resultado);
+    }).catch(function (err) { mostrarMensagem(err.message); });
+  });
+
+  function renderResultadoSimulacao(resultado) {
+    var container = document.getElementById('resultado-simulacao');
+    container.innerHTML = '';
+
+    var cards = document.createElement('div');
+    cards.className = 'grade-cards';
+    cards.appendChild(criarCard('Receita estimada', resultado.resumo.receitaEstimada, 'positivo'));
+    cards.appendChild(criarCard('Custo estimado', resultado.resumo.custoEstimado, 'negativo'));
+    cards.appendChild(criarCard('Margem estimada', resultado.resumo.margemEstimada));
+    container.appendChild(cards);
+
+    var tabelaPedidos = document.createElement('table');
+    tabelaPedidos.innerHTML = '<thead><tr><th>Produto</th><th>Desejado</th><th>Viável</th><th>Status</th><th>Custo</th><th>Receita</th></tr></thead>';
+    var tbody = document.createElement('tbody');
+    resultado.pedidos.forEach(function (p) {
+      var tr = document.createElement('tr');
+      var selo = p.atendeTotalmente
+        ? '<span class="selo ok">atende</span>'
+        : '<span class="selo faltou">parcial: falta ' + p.faltas.map(function (f) { return f.faltando.toFixed(2) + ' ' + f.unidade + ' de ' + f.insumoNome; }).join(', ') + '</span>';
+      tr.innerHTML = '<td>' + p.produtoNome + '</td><td>' + p.quantidadeDesejada + '</td><td>' + p.quantidadeViavel + '</td>' +
+        '<td>' + selo + '</td><td>' + fmtMoeda(p.custoEstimado) + '</td><td>' + fmtMoeda(p.receitaEstimada) + '</td>';
+      tbody.appendChild(tr);
+    });
+    tabelaPedidos.appendChild(tbody);
+    var wrap1 = document.createElement('div');
+    wrap1.className = 'tabela-wrap';
+    wrap1.appendChild(tabelaPedidos);
+    container.appendChild(wrap1);
+
+    var titulo = document.createElement('h3');
+    titulo.textContent = 'Com o estoque restante, ainda dá para produzir:';
+    container.appendChild(titulo);
+
+    var tabelaRestante = document.createElement('table');
+    tabelaRestante.innerHTML = '<thead><tr><th>Produto</th><th>Máximo possível</th></tr></thead>';
+    var tbody2 = document.createElement('tbody');
+    resultado.estoqueRestanteEstimativaProducao.forEach(function (r) {
+      var tr = document.createElement('tr');
+      tr.innerHTML = '<td>' + r.produtoNome + '</td><td>' + r.maxProducaoComEstoqueRestante + '</td>';
+      tbody2.appendChild(tr);
+    });
+    tabelaRestante.appendChild(tbody2);
+    var wrap2 = document.createElement('div');
+    wrap2.className = 'tabela-wrap';
+    wrap2.appendChild(tabelaRestante);
+    container.appendChild(wrap2);
+  }
+
+  // ---------- inicialização ----------
+  var hoje = new Date().toISOString().slice(0, 10);
+  ['form-compra', 'form-venda', 'form-lancamento'].forEach(function (id) {
+    var campoData = document.querySelector('#' + id + ' input[name="data"]');
+    if (campoData) campoData.value = hoje;
+  });
+
+  carregarTudo();
+})();
+</script>
