@@ -59,7 +59,7 @@ clasp login
 ```
 
 Isso abre o navegador para você autorizar com sua Conta do Google
-(`yuritaicer@gmail.com` ou a conta que for usar).
+(`yuritas.pessoal@gmail.com`).
 
 Ative a API do Apps Script (uma vez, por conta): acesse
 https://script.google.com/home/usersettings e ligue "Google Apps Script API".

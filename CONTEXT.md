@@ -14,7 +14,7 @@ do app, o e-mail logado é conferido contra uma aba `Usuarios` na planilha.
 - Branch de desenvolvimento: `claude/ifood-sales-control-app-osf7h6`
 - Pull Request aberto: **https://github.com/yuritas/Vendas_Financeiro/pull/1**
   (branch → `main`, ainda não mergeado)
-- E-mail do usuário/dono: `yuritaicer@gmail.com`
+- E-mail do usuário/dono e da publicação: `yuritas.pessoal@gmail.com`
 
 ## Decisões já tomadas (não perguntar de novo)
 
@@ -68,7 +68,7 @@ Nesta ordem:
 1. **Deploy real** (usuário vai fazer isso, possivelmente noutra sessão/chat):
    ```bash
    npm install -g @google/clasp
-   clasp login          # abre navegador, autoriza com yuritaicer@gmail.com
+   clasp login          # abre navegador, autoriza com yuritas.pessoal@gmail.com
    cd apps-script
    clasp create --title "Vendas Financeiro - iFood" --type webapp --rootDir .
    clasp push
