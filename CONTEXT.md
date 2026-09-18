@@ -53,7 +53,11 @@ Raiz do repo: `README.md` (passo a passo de deploy via clasp), `.clasp.json.exam
 `.claspignore`, `.gitignore`.
 
 Sintaxe de todos os `.gs` já validada com `node --check` (copiando para `.js`
-temporário, já que GAS roda um JS ES5-ish). **Ainda não foi testado rodando de
+temporário, já que GAS roda um JS ES5-ish). Na retomada de 18/09/2026, foi
+corrigida a dupla redução do saldo: compras movimentam o caixa; o custo de
+produção compõe o resultado, mas não reduz novamente o saldo bancário. Também
+foi documentado que usuários adicionais precisam receber acesso de Editor à
+planilha, além do cadastro na aba `Usuarios`. **Ainda não foi testado rodando de
 verdade** dentro do Apps Script (nunca foi feito `clasp push` real nem
 `setupPlanilha()`).
 

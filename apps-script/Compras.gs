@@ -58,6 +58,7 @@ function registrarCompra(dados) {
     categoria: 'Compra de insumo',
     descricao: 'Compra: ' + insumo.nome + ' (' + quantidade + ' ' + insumo.unidade + ')',
     valor: valorTotal,
+    impactaSaldo: true,
     usuario: usuario.email
   });
 

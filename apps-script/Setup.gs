@@ -19,7 +19,7 @@ function setupPlanilha() {
   abas[SHEET_NAMES.RECEITAS] = ['id', 'produtoFinalId', 'insumoId', 'quantidadePorUnidade'];
   abas[SHEET_NAMES.PRODUCAO] = ['id', 'data', 'produtoFinalId', 'quantidadeProduzida', 'custoTotal', 'usuario'];
   abas[SHEET_NAMES.VENDAS] = ['id', 'data', 'produtoFinalId', 'quantidade', 'valorUnitario', 'valorTotal', 'canal', 'usuario'];
-  abas[SHEET_NAMES.FINANCEIRO] = ['id', 'data', 'tipo', 'categoria', 'descricao', 'valor', 'saldoResultante', 'usuario'];
+  abas[SHEET_NAMES.FINANCEIRO] = ['id', 'data', 'tipo', 'categoria', 'descricao', 'valor', 'impactaSaldo', 'saldoResultante', 'usuario'];
 
   Object.keys(abas).forEach(function (nome) {
     var sheet = ss.getSheetByName(nome);

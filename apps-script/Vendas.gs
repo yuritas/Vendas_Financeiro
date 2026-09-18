@@ -45,6 +45,7 @@ function registrarVenda(dados) {
     categoria: 'Venda',
     descricao: 'Venda ' + (dados.canal || 'iFood') + ': ' + quantidade + ' x ' + produto.nome,
     valor: valorTotal,
+    impactaSaldo: true,
     usuario: usuario.email
   });
 

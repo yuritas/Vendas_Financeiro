@@ -7,10 +7,10 @@ Drive, e o acesso é protegido pelo próprio login da sua Conta do Google.
 
 ## O que o app faz
 
-- **Financeiro**: saldo bancário inicial, entradas (vendas), saídas (compras de
-  insumos, custo de produção, despesas manuais) e saldo final calculado
-  automaticamente a cada lançamento. Resumo por período com receita, custo,
-  margem bruta, despesas e lucro líquido.
+- **Financeiro**: saldo bancário inicial, entradas (vendas), saídas de caixa
+  (compras de insumos e despesas manuais) e saldo final calculado automaticamente.
+  O custo da produção entra no resultado sem reduzir o caixa uma segunda vez.
+  Resumo por período com receita, custo, margem bruta, despesas e lucro líquido.
 - **Estoque**: cadastro de insumos (itens comprados) organizados por
   categoria/subcategoria e por estabelecimento (fornecedor). Cada compra soma ao
   estoque e recalcula o custo médio ponderado do insumo.
@@ -107,10 +107,16 @@ se o e-mail está na aba `Usuarios` da planilha.
 
 ### 6. Liberar acesso para outras pessoas (opcional)
 
-Abra a planilha "Vendas_Financeiro - Banco de Dados" (Google Drive) e adicione
-uma linha na aba `Usuarios` com o e-mail, nome e papel (`admin` ou `usuario`) da
-pessoa. Ela já poderá acessar o app com o próprio login Google, sem precisar de
-nova implantação.
+Como o app é executado com a identidade de quem o acessa, faça as duas etapas:
+
+1. Compartilhe a planilha "Vendas_Financeiro - Banco de Dados" com o e-mail da
+   pessoa, concedendo permissão de **Editor**.
+2. Adicione uma linha na aba `Usuarios` com o e-mail, nome e papel (`admin` ou
+   `usuario`) da pessoa.
+
+Depois disso, ela poderá acessar o app com a própria Conta do Google, sem nova
+implantação. Apenas incluir o e-mail na aba `Usuarios` não concede acesso à
+planilha e, sozinho, não é suficiente.
 
 ### Atualizações futuras
 

@@ -1,9 +1,9 @@
 /**
  * Financeiro.gs
- * Saldo bancário, entradas, saídas e saldo final. Toda compra e toda produção já
- * geram lançamentos automáticos de saída (ver Compras.gs / Producao.gs); toda venda
- * gera lançamento automático de entrada (ver Vendas.gs). Lançamentos manuais (ex:
- * taxa do iFood, aluguel, embalagens) podem ser adicionados aqui.
+ * Saldo bancário, entradas, saídas e saldo final. Compras e vendas movimentam o caixa.
+ * A produção gera um lançamento de custo apenas para apuração do resultado, sem reduzir
+ * o saldo bancário novamente, pois os insumos já foram pagos na compra. Lançamentos
+ * manuais (ex: taxa do iFood e aluguel) podem ser adicionados aqui.
  */
 
 function getSaldoInicial_() {
@@ -29,7 +29,11 @@ function definirSaldoInicial(valor) {
 function registrarLancamentoFinanceiro_(dados) {
   var saldoAtual = getSaldoAtual_();
   var valor = Number(dados.valor);
-  var saldoResultante = dados.tipo === 'entrada' ? saldoAtual + valor : saldoAtual - valor;
+  var impactaSaldo = dados.impactaSaldo !== false;
+  var saldoResultante = saldoAtual;
+  if (impactaSaldo) {
+    saldoResultante = dados.tipo === 'entrada' ? saldoAtual + valor : saldoAtual - valor;
+  }
   var id = nextId_(SHEET_NAMES.FINANCEIRO);
   appendRow_(SHEET_NAMES.FINANCEIRO, {
     id: id,
@@ -38,6 +42,7 @@ function registrarLancamentoFinanceiro_(dados) {
     categoria: dados.categoria || '',
     descricao: dados.descricao || '',
     valor: arred_(valor),
+    impactaSaldo: impactaSaldo,
     saldoResultante: arred_(saldoResultante),
     usuario: dados.usuario || ''
   });
@@ -55,15 +60,23 @@ function registrarLancamentoManual(dados) {
     categoria: dados.categoria || 'Outros',
     descricao: dados.descricao || '',
     valor: Number(dados.valor),
+    impactaSaldo: true,
     usuario: usuario.email
   });
 }
 
 function getSaldoAtual_() {
   var lancamentos = readRows_(SHEET_NAMES.FINANCEIRO);
-  if (!lancamentos.length) return getSaldoInicial_();
-  var ultimo = lancamentos[lancamentos.length - 1];
-  return Number(ultimo.saldoResultante) || 0;
+  return lancamentos.reduce(function (saldo, lancamento) {
+    // Compatibilidade com dados criados antes da coluna impactaSaldo: custo de
+    // produção nunca movimenta caixa; os demais lançamentos antigos movimentam.
+    var impacta = lancamento.impactaSaldo === '' || lancamento.impactaSaldo === undefined
+      ? lancamento.categoria !== 'Custo de produção'
+      : String(lancamento.impactaSaldo).toUpperCase() !== 'FALSE';
+    if (!impacta) return saldo;
+    var valor = Number(lancamento.valor) || 0;
+    return lancamento.tipo === 'entrada' ? saldo + valor : saldo - valor;
+  }, getSaldoInicial_());
 }
 
 function listarLancamentos(limite) {
@@ -83,18 +96,22 @@ function resumoFinanceiro(dataInicio, dataFim) {
     return dentroDoPeriodo_(l.data, dataInicio, dataFim);
   });
 
-  var entradas = 0, saidas = 0, custoProducao = 0, despesasGerais = 0;
+  var entradas = 0, saidas = 0, custoProducao = 0, despesasGerais = 0, comprasInsumos = 0;
   lancamentos.forEach(function (l) {
     var valor = Number(l.valor) || 0;
-    if (l.tipo === 'entrada') {
-      entradas += valor;
-    } else {
-      saidas += valor;
-      if (l.categoria === 'Custo de produção') {
-        custoProducao += valor;
-      } else {
-        despesasGerais += valor;
-      }
+    var impacta = l.impactaSaldo === '' || l.impactaSaldo === undefined
+      ? l.categoria !== 'Custo de produção'
+      : String(l.impactaSaldo).toUpperCase() !== 'FALSE';
+
+    if (impacta && l.tipo === 'entrada') entradas += valor;
+    if (impacta && l.tipo === 'saida') saidas += valor;
+
+    if (l.categoria === 'Custo de produção') {
+      custoProducao += valor;
+    } else if (l.categoria === 'Compra de insumo') {
+      comprasInsumos += valor;
+    } else if (l.tipo === 'saida') {
+      despesasGerais += valor;
     }
   });
 
@@ -109,6 +126,7 @@ function resumoFinanceiro(dataInicio, dataFim) {
     periodo: { inicio: dataInicio || null, fim: dataFim || null },
     entradasTotais: arred_(entradas),
     saidasTotais: arred_(saidas),
+    comprasInsumos: arred_(comprasInsumos),
     receitaVendas: arred_(receitaVendas),
     custoProducao: arred_(custoProducao),
     despesasGerais: arred_(despesasGerais),

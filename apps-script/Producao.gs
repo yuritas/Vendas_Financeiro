@@ -124,8 +124,9 @@ function simularProducao(pedidos) {
 
 /**
  * Registra produção de fato: dá baixa real no estoque de insumos, grava na aba Producao
- * e cria lançamento financeiro de custo (saída). Use depois de simularProducao() confirmar
- * que cabe no estoque.
+ * e registra o custo da produção para a apuração do resultado. Esse custo não reduz
+ * novamente o saldo bancário, pois o caixa já foi afetado quando os insumos foram comprados.
+ * Use depois de simularProducao() confirmar que cabe no estoque.
  */
 function registrarProducao(produtoFinalId, quantidade) {
   var usuario = getUsuarioAtual_();
@@ -177,6 +178,7 @@ function registrarProducao(produtoFinalId, quantidade) {
     categoria: 'Custo de produção',
     descricao: 'Produção: ' + quantidade + ' x ' + (produto ? produto.nome : pid),
     valor: arred_(custoTotal),
+    impactaSaldo: false,
     usuario: usuario.email
   });
 
