@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <?!= include('Stylesheet'); ?>
+</head>
+<body>
+
+<? if (!usuario) { ?>
+  <div class="tela-login">
+    <h1>Vendas Financeiro - iFood</h1>
+    <div class="painel">
+      <p class="aviso erro"><?= erro ?></p>
+      <p>Você está logado com sua Conta do Google, mas seu e-mail ainda não foi liberado para usar este aplicativo.</p>
+      <p>Peça ao administrador para adicionar seu e-mail na aba <strong>Usuarios</strong> da planilha do banco de dados, ou rode a função <code>setupPlanilha()</code> no editor do Apps Script se este for o primeiro acesso.</p>
+    </div>
+  </div>
+<? } else { ?>
+
+  <header class="topo">
+    <h1>🍽️ Vendas Financeiro - iFood</h1>
+    <span class="usuario"><?= usuario.nome ?> · <?= usuario.papel ?></span>
+  </header>
+
+  <nav class="abas" id="abas">
+    <button data-secao="dashboard" class="ativa">Dashboard</button>
+    <button data-secao="estoque">Estoque</button>
+    <button data-secao="compras">Compras</button>
+    <button data-secao="receitas">Fichas Técnicas</button>
+    <button data-secao="producao">Produção</button>
+    <button data-secao="vendas">Vendas</button>
+    <button data-secao="financeiro">Financeiro</button>
+  </nav>
+
+  <main>
+    <div id="mensagens"></div>
+
+    <!-- DASHBOARD -->
+    <section id="secao-dashboard" class="secao ativa">
+      <div class="grade-cards" id="cards-resumo"></div>
+      <div class="painel">
+        <h2>Últimos lançamentos financeiros</h2>
+        <div class="tabela-wrap">
+          <table id="tabela-lancamentos-dashboard"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Saldo</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ESTOQUE -->
+    <section id="secao-estoque" class="secao">
+      <div class="painel">
+        <h2>Categorias e subcategorias</h2>
+        <form class="formulario" id="form-categoria">
+          <div class="campo"><label>Nova categoria</label><input type="text" name="nome" required></div>
+          <div class="campo"><button class="botao" type="submit">Adicionar categoria</button></div>
+        </form>
+        <form class="formulario" id="form-subcategoria" style="margin-top:10px;">
+          <div class="campo"><label>Categoria</label><select name="categoriaId" id="select-categoria-sub" required></select></div>
+          <div class="campo"><label>Nova subcategoria</label><input type="text" name="nome" required></div>
+          <div class="campo"><button class="botao secundario" type="submit">Adicionar subcategoria</button></div>
+        </form>
+      </div>
+
+      <div class="painel">
+        <h2>Estabelecimentos (fornecedores)</h2>
+        <form class="formulario" id="form-estabelecimento">
+          <div class="campo"><label>Nome</label><input type="text" name="nome" required></div>
+          <div class="campo"><label>Observação</label><input type="text" name="observacao"></div>
+          <div class="campo"><button class="botao" type="submit">Adicionar</button></div>
+        </form>
+      </div>
+
+      <div class="painel">
+        <h2>Insumos (itens de estoque)</h2>
+        <form class="formulario" id="form-insumo">
+          <div class="campo"><label>Nome do insumo</label><input type="text" name="nome" required></div>
+          <div class="campo"><label>Categoria</label><select name="categoriaId" id="select-categoria-insumo"></select></div>
+          <div class="campo"><label>Subcategoria</label><select name="subcategoriaId" id="select-subcategoria-insumo"></select></div>
+          <div class="campo"><label>Unidade (kg, un, L...)</label><input type="text" name="unidade" required></div>
+          <div class="campo"><label>Estoque mínimo</label><input type="number" step="0.01" name="estoqueMinimo" value="0"></div>
+          <div class="campo"><button class="botao" type="submit">Adicionar insumo</button></div>
+        </form>
+        <h3>Estoque atual</h3>
+        <div class="tabela-wrap">
+          <table id="tabela-insumos"><thead><tr><th>Insumo</th><th>Categoria</th><th>Estoque</th><th>Mínimo</th><th>Custo médio</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPRAS -->
+    <section id="secao-compras" class="secao">
+      <div class="painel">
+        <h2>Registrar compra</h2>
+        <form class="formulario" id="form-compra">
+          <div class="campo"><label>Data</label><input type="date" name="data" required></div>
+          <div class="campo"><label>Estabelecimento</label><select name="estabelecimentoId" id="select-estabelecimento-compra"></select></div>
+          <div class="campo"><label>Insumo</label><select name="insumoId" id="select-insumo-compra" required></select></div>
+          <div class="campo"><label>Quantidade</label><input type="number" step="0.01" name="quantidade" required></div>
+          <div class="campo"><label>Valor unitário (R$)</label><input type="number" step="0.01" name="valorUnitario" required></div>
+          <div class="campo"><button class="botao" type="submit">Registrar compra</button></div>
+        </form>
+      </div>
+      <div class="painel">
+        <h2>Últimas compras</h2>
+        <div class="tabela-wrap">
+          <table id="tabela-compras"><thead><tr><th>Data</th><th>Insumo</th><th>Qtd</th><th>Valor unit.</th><th>Total</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FICHAS TÉCNICAS / RECEITAS -->
+    <section id="secao-receitas" class="secao">
+      <div class="painel">
+        <h2>Produtos finais (o que você vende)</h2>
+        <form class="formulario" id="form-produto-final">
+          <div class="campo"><label>Nome (ex: Lasanha)</label><input type="text" name="nome" required></div>
+          <div class="campo"><label>Categoria</label><input type="text" name="categoria"></div>
+          <div class="campo"><label>Preço de venda (R$)</label><input type="number" step="0.01" name="precoVenda" required></div>
+          <div class="campo"><label>Lote padrão (un.)</label><input type="number" step="1" name="quantidadePadraoLote" value="1"></div>
+          <div class="campo"><button class="botao" type="submit">Adicionar produto</button></div>
+        </form>
+      </div>
+
+      <div class="painel">
+        <h2>Ficha técnica (ingredientes por unidade)</h2>
+        <div class="campo">
+          <label>Produto final</label>
+          <select id="select-produto-receita"></select>
+        </div>
+        <div id="linhas-receita" style="margin-top:10px;"></div>
+        <button class="botao secundario pequeno" id="btn-add-linha-receita" type="button">+ Adicionar ingrediente</button>
+        <div style="margin-top:12px;">
+          <button class="botao" id="btn-salvar-receita" type="button">Salvar ficha técnica</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PRODUÇÃO -->
+    <section id="secao-producao" class="secao">
+      <div class="painel">
+        <h2>Simular produção</h2>
+        <p style="font-size:13px;color:var(--cor-texto-suave);">
+          Informe quanto quer produzir de cada produto, na ordem de prioridade (o primeiro reserva estoque antes dos seguintes).
+          O app calcula quanto realmente cabe no estoque e, ao final, estima quanto ainda dá para produzir de cada produto com o que sobrar.
+        </p>
+        <div id="linhas-simulacao"></div>
+        <button class="botao secundario pequeno" id="btn-add-linha-simulacao" type="button">+ Adicionar produto à simulação</button>
+        <div style="margin-top:12px;">
+          <button class="botao" id="btn-simular" type="button">Simular</button>
+        </div>
+        <div id="resultado-simulacao" style="margin-top:16px;"></div>
+      </div>
+
+      <div class="painel">
+        <h2>Confirmar produção realizada</h2>
+        <form class="formulario" id="form-producao">
+          <div class="campo"><label>Produto</label><select name="produtoFinalId" id="select-produto-producao" required></select></div>
+          <div class="campo"><label>Quantidade produzida</label><input type="number" step="1" name="quantidade" required></div>
+          <div class="campo"><button class="botao" type="submit">Dar baixa no estoque</button></div>
+        </form>
+      </div>
+    </section>
+
+    <!-- VENDAS -->
+    <section id="secao-vendas" class="secao">
+      <div class="painel">
+        <h2>Registrar venda</h2>
+        <form class="formulario" id="form-venda">
+          <div class="campo"><label>Data</label><input type="date" name="data" required></div>
+          <div class="campo"><label>Produto</label><select name="produtoFinalId" id="select-produto-venda" required></select></div>
+          <div class="campo"><label>Quantidade</label><input type="number" step="1" name="quantidade" required></div>
+          <div class="campo"><label>Valor unitário (opcional)</label><input type="number" step="0.01" name="valorUnitario" placeholder="usa preço cadastrado"></div>
+          <div class="campo"><label>Canal</label><input type="text" name="canal" value="iFood"></div>
+          <div class="campo"><button class="botao" type="submit">Registrar venda</button></div>
+        </form>
+      </div>
+      <div class="painel">
+        <h2>Últimas vendas</h2>
+        <div class="tabela-wrap">
+          <table id="tabela-vendas"><thead><tr><th>Data</th><th>Produto</th><th>Qtd</th><th>Valor unit.</th><th>Total</th><th>Canal</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINANCEIRO -->
+    <section id="secao-financeiro" class="secao">
+      <div class="painel">
+        <h2>Saldo bancário inicial</h2>
+        <form class="formulario" id="form-saldo-inicial">
+          <div class="campo"><label>Saldo inicial (R$)</label><input type="number" step="0.01" name="valor" required></div>
+          <div class="campo"><button class="botao" type="submit">Salvar</button></div>
+        </form>
+      </div>
+      <div class="painel">
+        <h2>Lançamento manual</h2>
+        <form class="formulario" id="form-lancamento">
+          <div class="campo"><label>Data</label><input type="date" name="data" required></div>
+          <div class="campo"><label>Tipo</label><select name="tipo"><option value="entrada">Entrada</option><option value="saida">Saída</option></select></div>
+          <div class="campo"><label>Categoria</label><input type="text" name="categoria" placeholder="Ex: Taxa iFood, Aluguel"></div>
+          <div class="campo full"><label>Descrição</label><input type="text" name="descricao"></div>
+          <div class="campo"><label>Valor (R$)</label><input type="number" step="0.01" name="valor" required></div>
+          <div class="campo"><button class="botao" type="submit">Lançar</button></div>
+        </form>
+      </div>
+      <div class="painel">
+        <h2>Resumo por período</h2>
+        <form class="formulario" id="form-periodo">
+          <div class="campo"><label>De</label><input type="date" name="inicio"></div>
+          <div class="campo"><label>Até</label><input type="date" name="fim"></div>
+          <div class="campo"><button class="botao secundario" type="submit">Filtrar</button></div>
+        </form>
+        <div class="grade-cards" id="cards-resumo-financeiro" style="margin-top:14px;"></div>
+      </div>
+      <div class="painel">
+        <h2>Extrato</h2>
+        <div class="tabela-wrap">
+          <table id="tabela-financeiro"><thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Valor</th><th>Saldo</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <?!= include('JavaScript'); ?>
+<? } ?>
+
+</body>
+</html>
