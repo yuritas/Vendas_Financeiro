@@ -1,0 +1,11 @@
+{
+  "_aviso": "VALORES DE EXEMPLO — confira as taxas atuais e a postura de cada banco central antes de operar e atualize após cada reunião.",
+  "USD": {"rate": 4.25, "bias": "neutral"},
+  "EUR": {"rate": 2.00, "bias": "neutral"},
+  "GBP": {"rate": 4.00, "bias": "neutral"},
+  "JPY": {"rate": 0.50, "bias": "hawkish"},
+  "AUD": {"rate": 4.35, "bias": "neutral"},
+  "NZD": {"rate": 3.00, "bias": "dovish"},
+  "CAD": {"rate": 2.75, "bias": "neutral"},
+  "CHF": {"rate": 0.00, "bias": "neutral"}
+}

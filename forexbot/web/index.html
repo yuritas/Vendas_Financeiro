@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ForexBot</title>
+<style>
+  :root{--bg:#0f1115;--card:#171a21;--line:#262b35;--grid:#20242d;--txt:#e6e8ec;--mut:#8a93a3;--up:#22c55e;--dn:#ef4444;--acc:#60a5fa;--warn:#f59e0b}
+  @media (prefers-color-scheme: light){:root{--bg:#f5f6f8;--card:#fff;--line:#e3e6eb;--grid:#eef0f3;--txt:#151820;--mut:#5f6876;--up:#15803d;--dn:#dc2626;--acc:#2563eb}}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{padding:12px 16px 0;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:3}
+  .top{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  h1{font-size:16px;margin:0}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.6px;color:var(--mut);margin:0 0 10px;font-weight:600}
+  nav{display:flex;gap:2px;overflow-x:auto;margin-top:10px}
+  nav button{border:0;border-bottom:2px solid transparent;border-radius:0;padding:8px 12px;color:var(--mut)}
+  nav button.on{color:var(--txt);border-bottom-color:var(--acc)}
+  main{padding:16px;max-width:1400px;margin:0 auto}
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr))}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;overflow:auto}
+  .wide{grid-column:1/-1}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px}
+  .kpi b{display:block;font-size:20px;font-variant-numeric:tabular-nums}
+  .kpi span{color:var(--mut);font-size:12px}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  td.wrap{white-space:normal;min-width:220px}
+  th{color:var(--mut);font-weight:500;font-size:12px}
+  tr.click{cursor:pointer} tr.click:hover{background:var(--grid)}
+  .up{color:var(--up)}.dn{color:var(--dn)}.mut{color:var(--mut)}
+  .pill{display:inline-block;padding:2px 8px;border-radius:99px;font-size:12px;border:1px solid var(--line);margin:1px 2px 1px 0}
+  .pill.on{color:var(--up);border-color:var(--up)}.pill.off{color:var(--warn);border-color:var(--warn)}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:transparent;color:var(--txt);padding:6px 10px}
+  button.no{border-color:var(--dn);color:var(--dn)} button.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+  .bar{height:8px;border-radius:4px;background:var(--grid);position:relative}
+  .bar i{position:absolute;top:0;height:8px;border-radius:4px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  #login{max-width:360px;margin:15vh auto}
+  input,select{padding:8px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--txt);font:inherit}
+  #login input{width:100%;margin:8px 0}
+  #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--line);padding:10px 14px;border-radius:10px;display:none;max-width:90vw;z-index:9}
+  dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--txt);max-width:720px;width:calc(100% - 32px);padding:18px}
+  dialog::backdrop{background:rgba(0,0,0,.5)}
+  .sec{margin:12px 0} .sec ul{margin:4px 0;padding-left:18px}
+  .note{color:var(--mut);font-size:13px}
+  .chart{position:relative} .chart svg{width:100%;height:auto;display:block}
+  .tip{position:absolute;pointer-events:none;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:12px;display:none;white-space:nowrap}
+  .corr{border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}
+  .corr.rev{opacity:.55}
+</style>
+</head>
+<body>
+<div id="login" class="card" hidden>
+  <h2>Acesso</h2>
+  <p class="note">Informe o WEB_TOKEN definido no .env.</p>
+  <input id="tok" type="password" placeholder="token">
+  <button class="pri" onclick="saveTok()">Entrar</button>
+</div>
+
+<div id="app" hidden>
+<header>
+  <div class="top">
+    <h1>ForexBot <span id="mode" class="pill"></span></h1>
+    <div class="actions">
+      <button onclick="act('/api/analyze')">Analisar agora</button>
+      <button id="pauseBtn" onclick="togglePause()">Pausar</button>
+      <button class="no" onclick="act('/api/trades/close-all','Encerrar TODAS as operações do robô?')">Fechar tudo</button>
+    </div>
+  </div>
+  <nav id="tabs">
+    <button data-t="painel" class="on">Painel</button>
+    <button data-t="diario">Diário</button>
+    <button data-t="resultados">Resultados</button>
+    <button data-t="correcoes">Correções</button>
+    <button data-t="log">Log</button>
+  </nav>
+</header>
+<main>
+  <section data-p="painel" class="grid">
+    <div class="card wide"><div class="kpis" id="kpis"></div><p id="paperNote" class="note"></p></div>
+    <div class="card wide"><h2>Operações abertas</h2><div id="open"></div></div>
+    <div class="card" id="pendingCard" hidden><h2>Sinais aguardando confirmação</h2><div id="pending"></div></div>
+    <div class="card"><h2>Notas por moeda</h2><div id="scores"></div></div>
+    <div class="card"><h2>Próximas notícias</h2><div id="calendar"></div></div>
+  </section>
+
+  <section data-p="diario" hidden>
+    <div class="card">
+      <div class="actions" style="margin-bottom:10px">
+        <select id="fStatus" onchange="loadJournal()"><option value="">Todas</option><option value="open">Abertas</option><option value="closed">Encerradas</option></select>
+        <select id="fSymbol" onchange="loadJournal()"><option value="">Todos os pares</option></select>
+      </div>
+      <div id="journal"></div>
+      <p class="note">Toque numa linha para ver a justificativa da entrada, o diagnóstico e a lição.</p>
+    </div>
+  </section>
+
+  <section data-p="resultados" hidden class="grid">
+    <div class="card wide"><div class="kpis" id="skpis"></div></div>
+    <div class="card wide"><h2>Resultado acumulado</h2><div class="chart" id="equity"></div></div>
+    <div class="card wide"><h2>Resultado por operação (R)</h2><div class="chart" id="rbars"></div></div>
+    <div class="card"><h2>Por par</h2><div id="bySymbol"></div></div>
+    <div class="card"><h2>Causas das perdas (diagnóstico)</h2><div id="causes"></div></div>
+    <div class="card"><h2>Quanto cada pilar ajuda</h2><div id="pillars"></div>
+      <p class="note">Resultado médio quando o pilar apoiava a entrada vs. quando não apoiava. É isso que o aprendizado usa para ajustar os pesos.</p></div>
+    <div class="card"><h2>Por tipo de saída</h2><div id="byExit"></div></div>
+  </section>
+
+  <section data-p="correcoes" hidden class="grid">
+    <div class="card"><h2>Parâmetros em uso</h2><div id="params"></div></div>
+    <div class="card"><h2>Como o sistema aprende</h2>
+      <ul class="note">
+        <li>Após cada operação encerrada, o diagnóstico classifica as causas.</li>
+        <li>Perdas seguidas reduzem o risco à metade até a próxima vitória.</li>
+        <li>Pares com expectativa negativa passam a exigir nota maior.</li>
+        <li>Com amostra mínima, pilares que acertam ganham peso e os que erram perdem.</li>
+        <li>Causas que se repetem (notícia, stop rápido, sinal fraco, contra-tendência) ajustam o filtro correspondente.</li>
+        <li>Nenhuma correção aumenta o risco por operação. Todas podem ser desfeitas.</li>
+      </ul></div>
+    <div class="card wide"><h2>Histórico de correções</h2><div id="corrections"></div></div>
+  </section>
+
+  <section data-p="log" hidden><div class="card"><div id="log"></div></div></section>
+</main>
+</div>
+
+<dialog id="dlg"><div id="dlgBody"></div><div class="actions" style="margin-top:12px"><button onclick="dlg.close()">Fechar</button></div></dialog>
+<div id="toast"></div>
+
+<script>
+let TOKEN = '';
+try { TOKEN = localStorage.getItem('fxbot_token') || ''; } catch (e) {}
+let paused = false, tab = 'painel', LABELS = {};
+const $ = id => document.getElementById(id);
+const dlg = $('dlg');
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const num = (v, d = 2) => v == null ? '—' : Number(v).toFixed(d);
+const sgn = (v, d = 2) => v == null ? '—' : (v > 0 ? '+' : '') + Number(v).toFixed(d);
+const cls = v => v > 0 ? 'up' : v < 0 ? 'dn' : 'mut';
+const dt = s => s ? new Date(s).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'}) : '—';
+const dir = d => `<span class="${d==='BUY'?'up':'dn'}">${d==='BUY'?'COMPRA':'VENDA'}</span>`;
+
+function saveTok(){ TOKEN = $('tok').value.trim(); try{localStorage.setItem('fxbot_token', TOKEN)}catch(e){} boot(); }
+function toast(m){ const t=$('toast'); t.textContent=m; t.style.display='block'; clearTimeout(t._h); t._h=setTimeout(()=>t.style.display='none',4500); }
+
+async function api(path, method='GET'){
+  const r = await fetch(path, {method, headers:{Authorization:'Bearer '+TOKEN}});
+  if (r.status === 401){ $('app').hidden = true; $('login').hidden = false; throw new Error('401'); }
+  return r.json();
+}
+async function act(path, confirmMsg){
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  const d = await api(path, 'POST');
+  toast(d.message || (d.created ? `${d.created.length} entrada(s)/sinal(is)` : 'OK'));
+  refresh();
+}
+function togglePause(){ act(paused ? '/api/resume' : '/api/pause'); }
+
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  tab = b.dataset.t;
+  document.querySelectorAll('#tabs button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('main > section').forEach(s => s.hidden = s.dataset.p !== tab);
+  refresh();
+});
+
+/* ---------------- Painel ---------------- */
+function renderStatus(s){
+  const a = s.account || {};
+  paused = s.paused;
+  $('pauseBtn').textContent = paused ? 'Retomar' : 'Pausar';
+  $('mode').textContent = `${a.trade_mode || 'offline'} · ${s.mode === 'auto' ? 'automático' : 'confirmação'}${s.paper ? ' · simulado' : ''}${paused ? ' · pausado' : ''}`;
+  $('mode').className = 'pill ' + (paused ? 'off' : 'on');
+  $('paperNote').textContent = s.paper ? `Modo simulado: ${s.paper_reason}. As operações usam preços reais e alimentam o diário e o aprendizado, mas nenhuma ordem vai para a corretora.` : '';
+  $('kpis').innerHTML = [
+    ['Saldo', num(a.balance) + ' ' + (a.currency||'')],
+    ['Patrimônio', num(a.equity)],
+    ['Resultado do dia', `<span class="${cls(s.daily_pnl)}">${sgn(s.daily_pnl)}</span>`],
+    ['Abertas', (s.open_trades||[]).length],
+    ['Última análise', s.last_analysis ? new Date(s.last_analysis).toLocaleTimeString('pt-BR') : '—'],
+  ].map(([k,v]) => `<div class="kpi"><span>${k}</span><b>${v}</b></div>`).join('');
+
+  const ot = s.open_trades || [];
+  $('open').innerHTML = ot.length ? `<table><tr><th>#</th><th>Par</th><th>Lado</th><th>Lote</th><th>Entrada</th><th>SL</th><th>TP</th><th>Flutuante</th><th>R</th><th>Aberto</th><th></th></tr>
+    ${ot.map(t=>`<tr class="click" onclick="showTrade(${t.id})"><td>${t.id}${t.paper?' <span class="mut">sim</span>':''}</td><td>${esc(t.symbol)}</td><td>${dir(t.direction)}</td>
+      <td>${t.volume}</td><td>${t.entry}</td><td>${t.sl}</td><td>${t.tp}</td><td class="${cls(t.floating)}">${sgn(t.floating)}</td>
+      <td class="${cls(t.floating_r)}">${sgn(t.floating_r)}</td><td>${dt(t.opened_at)}</td>
+      <td><button class="no" onclick="event.stopPropagation();act('/api/trades/${t.id}/close','Encerrar trade #${t.id}?')">Encerrar</button></td></tr>`).join('')}</table>`
+    : '<p class="mut">Nenhuma operação aberta.</p>';
+  if ((s.manual_positions||[]).length) $('open').innerHTML += `<p class="note">${s.manual_positions.length} posição(ões) manual(is) na conta não são geridas pelo robô.</p>`;
+
+  $('pendingCard').hidden = !(s.pending||[]).length;
+  $('pending').innerHTML = (s.pending||[]).map(g => `<div class="corr"><b>${dir(g.direction)} ${esc(g.symbol)}</b>
+    <span class="mut">#${g.id} · nota ${sgn(g.score,1)}</span>
+    <div class="actions" style="margin-top:6px"><button onclick="act('/api/signals/${g.id}/approve','Executar?')">Executar</button>
+    <button class="no" onclick="act('/api/signals/${g.id}/reject')">Descartar</button></div></div>`).join('');
+}
+
+function renderScores(d){
+  if (!d.scores){ $('scores').innerHTML = '<p class="mut">Aguardando primeira análise.</p>'; return; }
+  const t = d.scores.total, p = d.scores.pillars, w = d.scores.weights || {};
+  const rows = Object.entries(t).sort((a,b)=>b[1]-a[1]);
+  const max = Math.max(5, ...rows.map(r=>Math.abs(r[1])));
+  $('scores').innerHTML = `<table><tr><th>Moeda</th><th>Total</th><th style="width:36%"></th><th>Cal. ×${num(w.calendario,1)}</th><th>Not. ×${num(w.noticias,1)}</th><th>Juros ×${num(w.juros,1)}</th></tr>
+    ${rows.map(([c,v])=>{ const ww = Math.abs(v)/max*50, left = v>=0 ? 50 : 50-ww;
+      return `<tr><td><b>${c}</b></td><td class="${cls(v)}">${sgn(v,1)}</td>
+        <td><div class="bar"><i style="left:${left}%;width:${ww}%;background:var(--${v>=0?'up':'dn'})"></i></div></td>
+        <td class="mut">${sgn(p.calendario[c],1)}</td><td class="mut">${sgn(p.noticias[c],1)}</td><td class="mut">${sgn(p.juros[c],1)}</td></tr>`;}).join('')}</table>`;
+}
+
+function renderCalendar(evs){
+  $('calendar').innerHTML = evs.length ? `<table><tr><th>Quando</th><th>Moeda</th><th>Evento</th><th>Previsão</th></tr>
+    ${evs.map(e=>`<tr><td>${new Date(e.time).toLocaleString('pt-BR',{weekday:'short',hour:'2-digit',minute:'2-digit'})}</td>
+      <td>${e.currency}</td><td class="${e.impact==='High'?'dn':''}">${esc(e.title)}</td><td class="mut">${esc(e.forecast)}</td></tr>`).join('')}</table>`
+    : '<p class="mut">Sem eventos relevantes.</p>';
+}
+
+/* ---------------- Diário ---------------- */
+async function loadJournal(){
+  const st = $('fStatus').value, sy = $('fSymbol').value;
+  const q = new URLSearchParams({limit: 300}); if (st) q.set('status', st); if (sy) q.set('symbol', sy);
+  const ts = await api('/api/trades?' + q);
+  $('journal').innerHTML = ts.length ? `<table><tr><th>#</th><th>Aberto</th><th>Par</th><th>Lado</th><th>Nota</th><th>Saída</th><th>Resultado</th><th>R</th><th>Diagnóstico</th></tr>
+    ${ts.map(t=>{ const cats = ((t.diagnosis||{}).categories||[]).map(c=>`<span class="pill">${esc(c.label)}</span>`).join('');
+      return `<tr class="click" onclick="showTrade(${t.id})"><td>${t.id}${t.paper?' <span class="mut">sim</span>':''}</td><td>${dt(t.opened_at)}</td>
+        <td>${esc(t.symbol)}</td><td>${dir(t.direction)}</td><td>${sgn(t.score,1)}</td>
+        <td>${t.status==='open'?'<span class="mut">aberta</span>':esc(t.exit_reason)}</td>
+        <td class="${cls(t.profit)}">${t.status==='open'?'—':sgn(t.profit)}</td><td class="${cls(t.r_multiple)}">${t.status==='open'?'—':sgn(t.r_multiple)}</td>
+        <td class="wrap">${cats || '<span class="mut">—</span>'}</td></tr>`;}).join('')}</table>`
+    : '<p class="mut">Nenhuma operação registrada ainda.</p>';
+}
+
+async function showTrade(id){
+  const t = await api('/api/trades/' + id);
+  const d = t.diagnosis || {}, c = t.context || {}, p = t.pillars || {};
+  const pil = Object.entries(p).map(([k,v])=>{ const a = t.direction==='BUY'? v : -v;
+    return `<li>${k}: ${sgn(v,1)} <span class="${cls(a)}">(${a>0.5?'apoiou':a<-0.5?'contra':'neutro'})</span></li>`; }).join('');
+  $('dlgBody').innerHTML = `
+    <h2>Trade #${t.id} ${t.paper?'· simulado':''}</h2>
+    <p><b>${dir(t.direction)} ${esc(t.symbol)}</b> · ${t.volume} lote · aberto ${dt(t.opened_at)}${t.closed_at?' · encerrado '+dt(t.closed_at):''}</p>
+    <p>Entrada ${t.entry} · SL ${t.sl} · TP ${t.tp} · risco ${num(t.risk_money)} (${num(c.risk_pct)}%)</p>
+    ${t.status==='closed'?`<p>Saída ${t.exit_price} (${esc(t.exit_reason)}) · <b class="${cls(t.profit)}">${sgn(t.profit)} · ${sgn(t.r_multiple)}R</b></p>`:''}
+    <div class="sec"><h2>Justificativa da entrada</h2><p>Nota ${sgn(t.score,1)} (mínimo exigido ${num(c.threshold,1)})</p>
+      <ul>${(t.reasons||[]).map(r=>`<li>${esc(r)}</li>`).join('')}</ul></div>
+    <div class="sec"><h2>Pilares na entrada (base − cotada)</h2><ul>${pil}</ul>
+      <p class="note">Tendência H4: ${c.trend_h4===1?'alta':c.trend_h4===-1?'baixa':'indefinida'}${c.trend_aligned===false?' — entrada CONTRA a tendência':''} · spread ${t.spread} pts · stop ${num(c.sl_atr_mult)}× ATR</p></div>
+    ${t.status==='closed'?`<div class="sec"><h2>Diagnóstico</h2><p>${esc(d.summary||'—')}</p>
+      ${(d.categories||[]).map(x=>`<span class="pill">${esc(x.label)}</span>`).join('')}
+      ${d.analise?`<p><b>Análise:</b> ${esc(d.analise)}</p>`:''}
+      ${d.licao?`<p><b>Lição:</b> ${esc(d.licao)}</p>`:''}
+      ${d.sugestao?`<p class="note"><b>Sugestão da IA (não aplicada automaticamente):</b> ${esc(d.sugestao)}</p>`:''}
+      ${d.pair_score_at_close!=null?`<p class="note">Nota do par no fechamento: ${sgn(d.pair_score_at_close,1)}</p>`:''}</div>`:''}
+    ${t.status==='open'?`<button class="no" onclick="dlg.close();act('/api/trades/${t.id}/close','Encerrar trade #${t.id}?')">Encerrar agora</button>`:''}`;
+  dlg.showModal();
+}
+
+/* ---------------- Resultados ---------------- */
+function lineChart(el, pts){
+  if (pts.length < 2){ el.innerHTML = '<p class="mut">Gráfico aparece a partir de 2 operações encerradas.</p>'; return; }
+  const W = 800, H = 260, P = {l:52, r:12, t:12, b:28};
+  const ys = pts.map(p=>p.cum), min = Math.min(0, ...ys), max = Math.max(0, ...ys), span = (max-min)||1;
+  const x = i => P.l + i*(W-P.l-P.r)/(pts.length-1), y = v => P.t + (max-v)/span*(H-P.t-P.b);
+  const ticks = [min, (min+max)/2, max];
+  const path = pts.map((p,i)=>`${i?'L':'M'}${x(i).toFixed(1)},${y(p.cum).toFixed(1)}`).join('');
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Resultado acumulado">
+    ${ticks.map(v=>`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--mut)">${num(v,0)}</text>`).join('')}
+    <line x1="${P.l}" x2="${W-P.r}" y1="${y(0)}" y2="${y(0)}" stroke="var(--mut)" stroke-dasharray="3 3"/>
+    <path d="${path}" fill="none" stroke="var(--acc)" stroke-width="2"/>
+    <text x="${P.l}" y="${H-8}" font-size="11" fill="var(--mut)">${dt(pts[0].t)}</text>
+    <text x="${W-P.r}" y="${H-8}" font-size="11" fill="var(--mut)" text-anchor="end">${dt(pts[pts.length-1].t)}</text>
+    <line id="xh" y1="${P.t}" y2="${H-P.b}" stroke="var(--mut)" visibility="hidden"/><circle id="xd" r="5" fill="var(--acc)" stroke="var(--card)" stroke-width="2" visibility="hidden"/>
+    <rect x="${P.l}" y="0" width="${W-P.l-P.r}" height="${H}" fill="transparent"/></svg><div class="tip"></div>`;
+  hover(el, pts.length, x, i => { const p = pts[i];
+    const svg = el.querySelector('svg'); svg.querySelector('#xh').setAttribute('x1', x(i)); svg.querySelector('#xh').setAttribute('x2', x(i));
+    svg.querySelector('#xh').setAttribute('visibility','visible'); const c = svg.querySelector('#xd'); c.setAttribute('cx', x(i)); c.setAttribute('cy', y(p.cum)); c.setAttribute('visibility','visible');
+    return `Trade #${p.id} · ${dt(p.t)}<br>Acumulado <b>${sgn(p.cum)}</b> · trade ${sgn(p.r)}R`; }, W);
+}
+
+function barChart(el, pts){
+  if (!pts.length){ el.innerHTML = '<p class="mut">Sem operações encerradas.</p>'; return; }
+  const W = 800, H = 200, P = {l:40, r:12, t:10, b:16};
+  const m = Math.max(1, ...pts.map(p=>Math.abs(p.r||0)));
+  const n = pts.length, bw = (W-P.l-P.r)/n, y = v => P.t + (m - v)/(2*m)*(H-P.t-P.b), y0 = y(0);
+  const x = i => P.l + i*bw + bw/2;
+  el.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="R por operação">
+    ${[m,0,-m].map(v=>`<line x1="${P.l}" x2="${W-P.r}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${P.l-6}" y="${y(v)+4}" text-anchor="end" font-size="11" fill="var(--mut)">${sgn(v,1)}</text>`).join('')}
+    ${pts.map((p,i)=>{ const v = p.r||0, h = Math.abs(y(v)-y0), w = Math.max(1, Math.min(18, bw-2));
+      return `<rect x="${x(i)-w/2}" y="${v>=0?y0-h:y0}" width="${w}" height="${Math.max(h,1)}" rx="${Math.min(4,w/2)}" fill="var(--${v>=0?'up':'dn'})"/>`;}).join('')}
+    <rect x="${P.l}" y="0" width="${W-P.l-P.r}" height="${H}" fill="transparent"/></svg><div class="tip"></div>`;
+  hover(el, n, x, i => `Trade #${pts[i].id} · ${dt(pts[i].t)}<br><b>${sgn(pts[i].r)}R</b> ${pts[i].r>=0?'ganho':'perda'}`, W);
+}
+
+function hover(el, n, x, html, W){
+  const svg = el.querySelector('svg'), tip = el.querySelector('.tip');
+  svg.addEventListener('mousemove', ev => {
+    const r = svg.getBoundingClientRect(), sx = (ev.clientX - r.left) * W / r.width;
+    let best = 0, bd = 1e9; for (let i=0;i<n;i++){ const d = Math.abs(x(i)-sx); if (d<bd){bd=d;best=i;} }
+    tip.innerHTML = html(best); tip.style.display = 'block';
+    const px = x(best) * r.width / W; tip.style.left = Math.min(px + 12, r.width - tip.offsetWidth) + 'px'; tip.style.top = '8px';
+  });
+  svg.addEventListener('mouseleave', () => { tip.style.display = 'none'; svg.querySelectorAll('#xh,#xd').forEach(e=>e.setAttribute('visibility','hidden')); });
+}
+
+function groupTable(g, label){
+  const rows = Object.entries(g).sort((a,b)=>b[1].profit-a[1].profit);
+  return rows.length ? `<table><tr><th>${label}</th><th>Trades</th><th>Acerto</th><th>Média R</th><th>Resultado</th></tr>
+    ${rows.map(([k,v])=>`<tr><td>${esc(k)}</td><td>${v.n}</td><td>${(v.win_rate*100).toFixed(0)}%</td><td class="${cls(v.avg_r)}">${sgn(v.avg_r)}</td><td class="${cls(v.profit)}">${sgn(v.profit)}</td></tr>`).join('')}</table>`
+    : '<p class="mut">Sem dados.</p>';
+}
+
+function renderStats(s){
+  $('skpis').innerHTML = [
+    ['Operações', s.trades], ['Acerto', s.trades ? (s.win_rate*100).toFixed(0)+'%' : '—'],
+    ['Expectativa', `<span class="${cls(s.expectancy_r)}">${sgn(s.expectancy_r)}R</span>`],
+    ['Fator de lucro', s.profit_factor ?? '—'], ['Resultado', `<span class="${cls(s.profit)}">${sgn(s.profit)}</span>`],
+    ['Drawdown máx.', num(s.max_drawdown)],
+  ].map(([k,v]) => `<div class="kpi"><span>${k}</span><b>${v}</b></div>`).join('')
+   + (s.trades < s.min_trades_for_learning ? `<p class="note" style="grid-column:1/-1">Amostra pequena: ajustes de peso começam com ${s.min_trades_for_learning} operações. Até lá, só proteções de risco e filtros por padrão repetido.</p>` : '');
+  lineChart($('equity'), s.curve);
+  barChart($('rbars'), s.curve);
+  $('bySymbol').innerHTML = groupTable(s.by_symbol, 'Par');
+  $('byExit').innerHTML = groupTable(s.by_exit, 'Saída');
+  const cz = Object.entries(s.loss_causes||{}), cm = Math.max(1, ...cz.map(c=>c[1]));
+  $('causes').innerHTML = cz.length ? `<table>${cz.map(([k,v])=>`<tr><td class="wrap">${esc(k)}</td><td style="width:35%"><div class="bar"><i style="left:0;width:${v/cm*100}%;background:var(--dn)"></i></div></td><td>${v}</td></tr>`).join('')}</table>`
+    : '<p class="mut">Nenhuma perda diagnosticada ainda.</p>';
+  $('pillars').innerHTML = `<table><tr><th>Pilar</th><th>Apoiou</th><th>Média R</th><th>Não apoiou</th><th>Média R</th></tr>
+    ${Object.entries(s.by_pillar).map(([k,v])=>`<tr><td>${k}</td><td>${v.apoiou_n}</td><td class="${cls(v.apoiou_avg_r)}">${sgn(v.apoiou_avg_r)}</td><td>${v.demais_n}</td><td class="${cls(v.demais_avg_r)}">${sgn(v.demais_avg_r)}</td></tr>`).join('')}</table>`;
+  const syms = Object.keys(s.by_symbol), sel = $('fSymbol');
+  if (sel.options.length <= 1) syms.forEach(x => sel.add(new Option(x, x)));
+}
+
+/* ---------------- Correções ---------------- */
+function renderCorrections(d){
+  LABELS = d.labels; const p = d.params;
+  const fmt = v => typeof v === 'object' && v !== null ? Object.entries(v).map(([k,x])=>`${k}: ${x}`).join(' · ') || '—' : typeof v === 'boolean' ? (v ? 'ligado' : 'desligado') : v;
+  $('params').innerHTML = `<table>${Object.entries(p).map(([k,v])=>`<tr><td class="wrap">${esc(LABELS[k]||k)}</td><td class="wrap"><b>${esc(fmt(v))}</b></td></tr>`).join('')}</table>`;
+  $('corrections').innerHTML = d.items.length ? d.items.map(c => `<div class="corr ${c.reverted?'rev':''}">
+      <b>#${c.id} · ${esc(LABELS[c.kind]||c.kind)} [${esc(c.target)}]</b> <span class="mut">${dt(c.ts)}</span>
+      ${c.reverted ? '<span class="pill">desfeita</span>' : ''}<br>
+      ${esc(fmt(c.old_value))} → <b>${esc(fmt(c.new_value))}</b>
+      <p>${esc(c.justification)}</p>
+      <p class="note">Evidência: ${esc(Object.entries(c.evidence||{}).map(([k,v])=>`${k.replace(/_/g,' ')} ${v}`).join(' · '))}</p>
+      ${c.reverted ? '' : `<button onclick="act('/api/corrections/${c.id}/revert','Desfazer correção #${c.id}?')">Desfazer</button>`}
+    </div>`).join('') : '<p class="mut">Nenhuma correção aplicada ainda. Elas surgem conforme as operações se acumulam.</p>';
+}
+
+function renderLog(rows){
+  $('log').innerHTML = `<table>${rows.map(r=>`<tr><td class="mut">${new Date(r.ts).toLocaleString('pt-BR')}</td>
+    <td class="wrap ${r.level==='ERROR'?'dn':''}">${esc(r.msg)}</td></tr>`).join('')}</table>`;
+}
+
+async function refresh(){
+  try{
+    renderStatus(await api('/api/status'));
+    if (tab === 'painel'){ const [sc, ca] = await Promise.all([api('/api/scores'), api('/api/calendar')]); renderScores(sc); renderCalendar(ca); }
+    if (tab === 'diario') await loadJournal();
+    if (tab === 'resultados') renderStats(await api('/api/stats'));
+    if (tab === 'correcoes') renderCorrections(await api('/api/corrections'));
+    if (tab === 'log') renderLog(await api('/api/log?limit=150'));
+  }catch(e){ if (e.message !== '401') toast('Erro ao atualizar: ' + e.message); }
+}
+
+function boot(){
+  if (!TOKEN){ $('login').hidden = false; return; }
+  $('login').hidden = true; $('app').hidden = false;
+  refresh(); api('/api/stats').then(renderStats).catch(()=>{});
+}
+setInterval(()=>{ if (TOKEN && !$('app').hidden && !dlg.open) refresh(); }, 10000);
+boot();
+</script>
+</body>
+</html>
