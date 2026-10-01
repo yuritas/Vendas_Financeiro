@@ -4,6 +4,7 @@ Uso (no Windows, com o MetaTrader 5 aberto e logado):
     python main.py
 """
 import secrets
+from pathlib import Path
 
 import uvicorn
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -22,6 +23,7 @@ import whatsapp
 from fundamentals import calendar as cal
 
 app = FastAPI(title="ForexBot")
+INDEX = Path(__file__).resolve().parent / "web" / "index.html"
 
 
 # ---------- autenticação do painel ----------
@@ -34,7 +36,7 @@ def auth(authorization: str = Header(default="")):
 # ---------- painel ----------
 @app.get("/")
 def index():
-    return FileResponse("web/index.html")
+    return FileResponse(INDEX)
 
 
 @app.get("/api/status", dependencies=[Depends(auth)])
@@ -137,7 +139,9 @@ def api_log(limit: int = 50):
 @app.get("/webhook")
 def wa_verify(request: Request):
     q = request.query_params
-    if q.get("hub.mode") == "subscribe" and q.get("hub.verify_token") == config.WA_VERIFY_TOKEN:
+    token = q.get("hub.verify_token") or ""
+    if (q.get("hub.mode") == "subscribe" and config.WA_VERIFY_TOKEN
+            and secrets.compare_digest(token, config.WA_VERIFY_TOKEN)):
         return PlainTextResponse(q.get("hub.challenge", ""))
     raise HTTPException(403, "Verificação falhou")
 

@@ -92,7 +92,7 @@ commands.py        comandos de texto do WhatsApp
 fundamentals/      calendar.py, news.py, macro.py, scorer.py
 web/index.html     painel
 macro.json         juros e postura dos BCs (ATUALIZE)
-tests/             teste com MT5 simulado
+tests/             testes com MT5 simulado (fluxo completo e API)
 ```
 
 ## Instalação na VPS Windows
@@ -109,7 +109,8 @@ tests/             teste com MT5 simulado
    ```
 4. Edite o `.env` (login MT5, `WEB_TOKEN`, chaves) e o `macro.json` com as taxas atuais.
    Se os símbolos da corretora tiverem sufixo (ex.: `EURUSD.a`), preencha `SYMBOL_SUFFIX`.
-5. Teste a lógica (não precisa do MT5): `python tests\test_simulado.py`
+5. Teste a lógica (não precisa do MT5): `python tests\test_simulado.py` e `python tests\test_api.py`
+   (o teste da API precisa também de `pip install httpx`)
 6. Rode: `python main.py` e abra `http://127.0.0.1:8000` na VPS.
 
 Para iniciar com o Windows, crie uma tarefa no *Agendador de Tarefas* executando
